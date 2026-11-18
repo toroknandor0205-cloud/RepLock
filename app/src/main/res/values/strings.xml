@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RepLock</string>
+    <string name="accessibility_service_label">RepLock Scroll Tracker</string>
+    <string name="accessibility_service_description">
+        Monitors TikTok and Instagram Reels. Blocks them after the daily limit of 75 videos. Unlock by performing push-ups detected by the camera.
+    </string>
+</resources>
