@@ -11,7 +11,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -20,8 +19,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,7 +31,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -97,7 +93,6 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Background gradient
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -112,7 +107,6 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
                 )
         )
 
-        // Content
         AnimatedContent(
             targetState = currentScreen,
             transitionSpec = {
@@ -126,26 +120,40 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
                     remaining = remaining,
                     isAccessibilityEnabled = isAccessibilityEnabled,
                     canDrawOverlays = canDrawOverlays,
-                    onOpenSettings = {
-                        isAccessibilityEnabled = isAccessibilityServiceEnabled(context)
-                        canDrawOverlays = Settings.canDrawOverlays(context)
+                    onOpenAccessibilitySettings = {
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    },
+                    onOpenOverlaySettings = {
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:${context.packageName}")
+                        )
+                        context.startActivity(intent)
                     },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(bottom = 110.dp)
                 )
+
                 Screen.PUSHUP -> PushupDetectorScreen(
                     onPushupDetected = {
                         remaining = quotaRepo.addFromPushup()
                     },
                     onClose = { currentScreen = Screen.HOME }
                 )
+
                 Screen.SETTINGS -> SettingsContent(
                     isAccessibilityEnabled = isAccessibilityEnabled,
                     canDrawOverlays = canDrawOverlays,
-                    onRefresh = {
-                        isAccessibilityEnabled = isAccessibilityServiceEnabled(context)
-                        canDrawOverlays = Settings.canDrawOverlays(context)
+                    onOpenAccessibilitySettings = {
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    },
+                    onOpenOverlaySettings = {
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:${context.packageName}")
+                        )
+                        context.startActivity(intent)
                     },
                     modifier = Modifier
                         .fillMaxSize()
@@ -154,7 +162,6 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
             }
         }
 
-        // Floating Island Dock
         if (currentScreen != Screen.PUSHUP) {
             FloatingIslandDock(
                 currentScreen = currentScreen,
@@ -172,7 +179,8 @@ private fun HomeContent(
     remaining: Int,
     isAccessibilityEnabled: Boolean,
     canDrawOverlays: Boolean,
-    onOpenSettings: () -> Unit,
+    onOpenAccessibilitySettings: () -> Unit,
+    onOpenOverlaySettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -197,10 +205,7 @@ private fun HomeContent(
 
         Spacer(modifier = Modifier.height(40.dp))
 
-        // Glass quota card
-        GlassCard(
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -243,28 +248,16 @@ private fun HomeContent(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // Status cards
         StatusGlassRow(
             title = "Accessibility",
             enabled = isAccessibilityEnabled,
-            onClick = {
-                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                LocalContext.current.startActivity(intent)
-                onOpenSettings()
-            }
+            onClick = onOpenAccessibilitySettings
         )
         Spacer(modifier = Modifier.height(12.dp))
         StatusGlassRow(
             title = "Overlay permission",
             enabled = canDrawOverlays,
-            onClick = {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:${LocalContext.current.packageName}")
-                )
-                LocalContext.current.startActivity(intent)
-                onOpenSettings()
-            }
+            onClick = onOpenOverlaySettings
         )
     }
 }
@@ -273,10 +266,10 @@ private fun HomeContent(
 private fun SettingsContent(
     isAccessibilityEnabled: Boolean,
     canDrawOverlays: Boolean,
-    onRefresh: () -> Unit,
+    onOpenAccessibilitySettings: () -> Unit,
+    onOpenOverlaySettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -294,23 +287,13 @@ private fun SettingsContent(
         StatusGlassRow(
             title = "Accessibility Service",
             enabled = isAccessibilityEnabled,
-            onClick = {
-                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                onRefresh()
-            }
+            onClick = onOpenAccessibilitySettings
         )
         Spacer(modifier = Modifier.height(12.dp))
         StatusGlassRow(
             title = "Display over other apps",
             enabled = canDrawOverlays,
-            onClick = {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:${context.packageName}")
-                )
-                context.startActivity(intent)
-                onRefresh()
-            }
+            onClick = onOpenOverlaySettings
         )
         Spacer(modifier = Modifier.height(24.dp))
         GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -337,7 +320,6 @@ private fun FloatingIslandDock(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // True island: no full-width bar, just a floating capsule
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(40.dp))
