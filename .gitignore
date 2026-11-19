@@ -1,13 +1,32 @@
-*.iml
-.gradle
-/local.properties
-/.idea
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# Built application files
 *.apk
 *.ap_
 *.aab
+
+# Gradle files
+.gradle/
+build/
+**/build/
+
+# Local configuration
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+.idea_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Captures & NDK
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Release signing
+*.jks
+*.keystore
 app/release/
