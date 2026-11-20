@@ -33,7 +33,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -102,7 +101,6 @@ fun MainScreen(quotaRepo: TimeQuotaRepository) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Animated Mesh Gradient Background
         MeshGradientBackground()
 
         AnimatedContent(
@@ -177,8 +175,6 @@ fun MainScreen(quotaRepo: TimeQuotaRepository) {
     }
 }
 
-// ====================== MESH GRADIENT BACKGROUND ======================
-
 @Composable
 private fun MeshGradientBackground() {
     val infinite = rememberInfiniteTransition(label = "mesh")
@@ -196,16 +192,14 @@ private fun MeshGradientBackground() {
         val w = size.width
         val h = size.height
 
-        // Base
         drawRect(Color(0xFF03030A))
 
-        // Moving blobs
         val cx1 = w * (0.3f + 0.15f * sin(Math.toRadians(t.toDouble())).toFloat())
-        val cy1 = h * (0.25f + 0.1f * cos(Math.toRadians(t * 0.8).toDouble())).toFloat())
-        val cx2 = w * (0.75f + 0.12f * cos(Math.toRadians(t * 1.1).toDouble())).toFloat())
-        val cy2 = h * (0.65f + 0.12f * sin(Math.toRadians(t * 0.9).toDouble())).toFloat())
-        val cx3 = w * (0.5f + 0.2f * sin(Math.toRadians(t * 0.6).toDouble())).toFloat())
-        val cy3 = h * (0.5f + 0.15f * cos(Math.toRadians(t * 1.3).toDouble())).toFloat())
+        val cy1 = h * (0.25f + 0.1f * cos(Math.toRadians((t * 0.8).toDouble())).toFloat())
+        val cx2 = w * (0.75f + 0.12f * cos(Math.toRadians((t * 1.1).toDouble())).toFloat())
+        val cy2 = h * (0.65f + 0.12f * sin(Math.toRadians((t * 0.9).toDouble())).toFloat())
+        val cx3 = w * (0.5f + 0.2f * sin(Math.toRadians((t * 0.6).toDouble())).toFloat())
+        val cy3 = h * (0.5f + 0.15f * cos(Math.toRadians((t * 1.3).toDouble())).toFloat())
 
         drawCircle(
             brush = Brush.radialGradient(
@@ -236,8 +230,6 @@ private fun MeshGradientBackground() {
         )
     }
 }
-
-// ====================== HOME ======================
 
 @Composable
 private fun HomeContent(
@@ -274,9 +266,7 @@ private fun HomeContent(
 
         Spacer(modifier = Modifier.height(40.dp))
 
-        // Circular progress with glass
         Box(contentAlignment = Alignment.Center) {
-            // Outer glass ring background
             Box(
                 modifier = Modifier
                     .size(240.dp)
@@ -332,7 +322,6 @@ private fun HomeContent(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // Stats row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -419,8 +408,6 @@ private fun SettingsContent(
     }
 }
 
-// ====================== DOCK ======================
-
 @Composable
 private fun LiquidDock(
     currentScreen: Screen,
@@ -457,7 +444,6 @@ private fun LiquidDock(
             )
             .padding(8.dp)
     ) {
-        // Sliding glass indicator
         Box(
             modifier = Modifier
                 .offset { IntOffset(indicatorX.value.roundToInt(), 0) }
@@ -531,8 +517,6 @@ private fun DockButton(
         )
     }
 }
-
-// ====================== GLASS COMPONENTS ======================
 
 @Composable
 private fun GlassCard(content: @Composable () -> Unit) {
