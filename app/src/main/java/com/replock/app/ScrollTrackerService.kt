@@ -8,6 +8,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -16,15 +17,16 @@ import com.replock.app.data.VideoQuotaRepository
 class ScrollTrackerService : AccessibilityService() {
 
     private lateinit var quotaRepo: VideoQuotaRepository
-    private var lastEventTime = 0L
-    private val debounceMs = 800L
+    private var lastVideoTime = 0L
+    private val minIntervalMs = 1400L          // minimum time between two counted videos
+    private var lastPackage: String? = null
     private var overlayView: FrameLayout? = null
     private val handler = Handler(Looper.getMainLooper())
 
     private val trackedPackages = setOf(
-        "com.zhiliaoapp.musically",
-        "com.ss.android.ugc.aweme",
-        "com.instagram.android"
+        "com.zhiliaoapp.musically",   // TikTok
+        "com.ss.android.ugc.aweme",   // TikTok (alternative)
+        "com.instagram.android"      // Instagram
     )
 
     override fun onServiceConnected() {
@@ -37,8 +39,9 @@ class ScrollTrackerService : AccessibilityService() {
                     AccessibilityEvent.TYPE_VIEW_SCROLLED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
-                    AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-            notificationTimeout = 100
+                    AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                    AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            notificationTimeout = 80
         }
     }
 
@@ -48,18 +51,44 @@ class ScrollTrackerService : AccessibilityService() {
         if (packageName !in trackedPackages) return
 
         val now = System.currentTimeMillis()
-        if (now - lastEventTime < debounceMs) return
-        lastEventTime = now
 
-        val isNewVideoCandidate =
-            event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
-                    event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        // Only count when enough time has passed since last video
+        if (now - lastVideoTime < minIntervalMs) return
 
-        if (isNewVideoCandidate) {
+        val shouldCount = when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> true
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                // Extra check for Instagram Reels / TikTok feed changes
+                isLikelyNewVideo(event)
+            }
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                // Strong signal of swiping to next video
+                true
+            }
+            else -> false
+        }
+
+        if (shouldCount) {
+            lastVideoTime = now
+            lastPackage = packageName
+
             val remaining = quotaRepo.consumeVideo()
             if (remaining <= 0) {
                 blockCurrentApp()
             }
+        }
+    }
+
+    private fun isLikelyNewVideo(event: AccessibilityEvent): Boolean {
+        // Heuristic: large content change usually means new video loaded
+        val node = event.source ?: return false
+        return try {
+            val childCount = node.childCount
+            childCount > 3   // simple but effective filter
+        } catch (e: Exception) {
+            false
+        } finally {
+            node.recycle()
         }
     }
 
@@ -72,7 +101,7 @@ class ScrollTrackerService : AccessibilityService() {
                 "Daily limit reached. Open RepLock and do push-ups to unlock.",
                 Toast.LENGTH_LONG
             ).show()
-        }, 1200)
+        }, 1100)
     }
 
     private fun showBlockOverlay() {
@@ -105,7 +134,7 @@ class ScrollTrackerService : AccessibilityService() {
 
         try {
             windowManager.addView(overlayView, params)
-            handler.postDelayed({ removeOverlay() }, 3000)
+            handler.postDelayed({ removeOverlay() }, 2800)
         } catch (e: Exception) {
             e.printStackTrace()
         }
