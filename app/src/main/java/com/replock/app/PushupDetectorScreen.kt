@@ -6,8 +6,6 @@ import android.view.ViewGroup
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -43,7 +41,7 @@ import kotlin.math.atan2
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun PushupDetectorScreen(
-    onPushupDetected: () -> Unit,
+    onPushupsCompleted: (Int) -> Unit,
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
@@ -51,6 +49,7 @@ fun PushupDetectorScreen(
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
 
     var pushupCount by remember { mutableIntStateOf(0) }
+    var sessionPushups by remember { mutableIntStateOf(0) }
     var currentState by remember { mutableStateOf(PushupState.UNKNOWN) }
     var feedback by remember { mutableStateOf("Stand in front of the camera. Full body visible.") }
 
@@ -66,6 +65,10 @@ fun PushupDetectorScreen(
         onDispose {
             poseDetector.close()
             cameraExecutor.shutdown()
+            // Award minutes when leaving the screen
+            if (sessionPushups > 0) {
+                onPushupsCompleted(sessionPushups)
+            }
         }
     }
 
@@ -73,7 +76,7 @@ fun PushupDetectorScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF05050A)),
+                .background(Color(0xFF03030A)),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -122,8 +125,13 @@ fun PushupDetectorScreen(
                                     currentState = result.newState
                                     if (result.counted) {
                                         pushupCount++
-                                        onPushupDetected()
-                                        feedback = "Good form. +1 video unlocked"
+                                        sessionPushups++
+                                        val minutesEarned = sessionPushups / 2
+                                        feedback = if (sessionPushups % 2 == 0) {
+                                            "Good. +1 minute earned"
+                                        } else {
+                                            "Good form. One more for +1 minute"
+                                        }
                                     } else {
                                         feedback = result.feedback
                                     }
@@ -169,7 +177,7 @@ fun PushupDetectorScreen(
             }
             Text(
                 text = currentState.name,
-                color = Color.White.copy(alpha = 0.8f),
+                color = Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.labelLarge
             )
         }
@@ -181,11 +189,7 @@ fun PushupDetectorScreen(
                 .padding(horizontal = 32.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(Color.Black.copy(alpha = 0.55f))
-                .border(
-                    1.dp,
-                    Color.White.copy(alpha = 0.12f),
-                    RoundedCornerShape(20.dp)
-                )
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
                 .padding(horizontal = 24.dp, vertical = 14.dp)
         ) {
             Text(
@@ -195,7 +199,7 @@ fun PushupDetectorScreen(
             )
         }
 
-        // Bottom counter island
+        // Bottom counter
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -216,19 +220,19 @@ fun PushupDetectorScreen(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "Push-ups",
-                    color = Color.White.copy(alpha = 0.7f),
+                    text = "Push-ups this session",
+                    color = Color.White.copy(alpha = 0.65f),
                     style = MaterialTheme.typography.labelLarge
                 )
                 Text(
-                    text = "$pushupCount",
-                    color = MaterialTheme.colorScheme.primary,
+                    text = "$sessionPushups",
+                    color = Color(0xFF8AB4FF),
                     fontSize = 42.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "1 push-up = 1 video",
-                    color = Color.White.copy(alpha = 0.55f),
+                    text = "2 push-ups = 1 minute",
+                    color = Color.White.copy(alpha = 0.5f),
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -270,7 +274,7 @@ private fun detectPushup(pose: Pose, previous: PushupState): PushupResult {
         previous == PushupState.UP && isDown ->
             PushupResult(PushupState.DOWN, false, "Lower position. Push up.")
         previous == PushupState.DOWN && isUp ->
-            PushupResult(PushupState.UP, true, "Good form. +1 video unlocked")
+            PushupResult(PushupState.UP, true, "Good form")
         isUp -> PushupResult(PushupState.UP, false, "Ready. Lower your body.")
         isDown -> PushupResult(PushupState.DOWN, false, "Push up with control.")
         else -> PushupResult(previous, false, "Move with control")
