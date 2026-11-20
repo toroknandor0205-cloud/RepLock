@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -37,16 +38,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.replock.app.data.VideoQuotaRepository
 import com.replock.app.ui.theme.RepLockTheme
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
@@ -93,15 +101,16 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Deep background
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF05050A),
-                            Color(0xFF0A0A18),
-                            Color(0xFF05050A)
+                            Color(0xFF030308),
+                            Color(0xFF0A0A16),
+                            Color(0xFF05050C)
                         )
                     )
                 )
@@ -110,8 +119,8 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
         AnimatedContent(
             targetState = currentScreen,
             transitionSpec = {
-                (fadeIn(tween(280)) + scaleIn(initialScale = 0.96f, animationSpec = tween(280)))
-                    .togetherWith(fadeOut(tween(200)) + scaleOut(targetScale = 0.96f, animationSpec = tween(200)))
+                (fadeIn(tween(300)) + scaleIn(initialScale = 0.97f, animationSpec = tween(300)))
+                    .togetherWith(fadeOut(tween(220)) + scaleOut(targetScale = 0.97f, animationSpec = tween(220)))
             },
             label = "screen"
         ) { screen ->
@@ -132,7 +141,7 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
                     },
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = 110.dp)
+                        .padding(bottom = 120.dp)
                 )
 
                 Screen.PUSHUP -> PushupDetectorScreen(
@@ -157,18 +166,18 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
                     },
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = 110.dp)
+                        .padding(bottom = 120.dp)
                 )
             }
         }
 
         if (currentScreen != Screen.PUSHUP) {
-            FloatingIslandDock(
+            LiquidGlassDock(
                 currentScreen = currentScreen,
                 onNavigate = { currentScreen = it },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 28.dp)
+                    .padding(bottom = 32.dp)
             )
         }
     }
@@ -187,48 +196,48 @@ private fun HomeContent(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp)
-            .padding(top = 56.dp),
+            .padding(top = 64.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = "RepLock",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground
+            color = Color.White
         )
         Text(
             text = "Stop the scroll. Earn every video.",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = Color.White.copy(alpha = 0.55f),
             modifier = Modifier.padding(top = 6.dp)
         )
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(44.dp))
 
-        GlassCard(modifier = Modifier.fillMaxWidth()) {
+        // Big glass counter
+        LiquidGlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(28.dp),
+                    .padding(vertical = 36.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "Remaining today",
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.White.copy(alpha = 0.6f)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = "$remaining",
-                    fontSize = 72.sp,
+                    fontSize = 80.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (remaining > 0) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.tertiary
+                    color = if (remaining > 0) Color(0xFF8AB4FF) else Color(0xFFFF8A9B)
                 )
                 Text(
                     text = "of ${VideoQuotaRepository.DAILY_LIMIT}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.White.copy(alpha = 0.45f)
                 )
             }
         }
@@ -236,25 +245,25 @@ private fun HomeContent(
         Spacer(modifier = Modifier.height(20.dp))
 
         if (remaining <= 0) {
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
+            LiquidGlassCard(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Daily limit reached. Perform push-ups to unlock more videos.",
+                    text = "Daily limit reached.\nPerform push-ups to unlock more videos.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.tertiary,
+                    color = Color(0xFFFF8A9B),
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(20.dp)
+                    modifier = Modifier.padding(22.dp)
                 )
             }
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        StatusGlassRow(
+        StatusRow(
             title = "Accessibility",
             enabled = isAccessibilityEnabled,
             onClick = onOpenAccessibilitySettings
         )
         Spacer(modifier = Modifier.height(12.dp))
-        StatusGlassRow(
+        StatusRow(
             title = "Overlay permission",
             enabled = canDrawOverlays,
             onClick = onOpenOverlaySettings
@@ -274,108 +283,178 @@ private fun SettingsContent(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp)
-            .padding(top = 56.dp),
+            .padding(top = 64.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = "Settings",
             style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White
         )
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(36.dp))
 
-        StatusGlassRow(
+        StatusRow(
             title = "Accessibility Service",
             enabled = isAccessibilityEnabled,
             onClick = onOpenAccessibilitySettings
         )
         Spacer(modifier = Modifier.height(12.dp))
-        StatusGlassRow(
+        StatusRow(
             title = "Display over other apps",
             enabled = canDrawOverlays,
             onClick = onOpenOverlaySettings
         )
-        Spacer(modifier = Modifier.height(24.dp))
-        GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(20.dp)) {
+        Spacer(modifier = Modifier.height(28.dp))
+
+        LiquidGlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(22.dp)) {
                 Text(
                     text = "How it works",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "RepLock watches TikTok and Instagram Reels through the Accessibility Service. After 75 videos the feed is blocked. Each correct push-up detected by the front camera restores one video.",
+                    text = "RepLock monitors TikTok and Instagram Reels. After 75 videos the feed is blocked. Every correct push-up detected by the camera restores one video.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.White.copy(alpha = 0.6f)
                 )
             }
         }
     }
 }
 
+// ==================== LIQUID GLASS DOCK WITH SLIDER ====================
+
 @Composable
-private fun FloatingIslandDock(
+private fun LiquidGlassDock(
     currentScreen: Screen,
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+
+    // Positions of the three buttons
+    val buttonPositions = remember { mutableStateListOf(0f, 0f, 0f) }
+    val buttonWidth = remember { mutableStateOf(0f) }
+
+    val indicatorOffset = remember { Animatable(0f) }
+
+    // Animate indicator when screen changes
+    LaunchedEffect(currentScreen, buttonPositions.toList()) {
+        val index = when (currentScreen) {
+            Screen.HOME -> 0
+            Screen.PUSHUP -> 1
+            Screen.SETTINGS -> 2
+        }
+        if (buttonPositions[index] != 0f) {
+            indicatorOffset.animateTo(
+                targetValue = buttonPositions[index],
+                animationSpec = spring(
+                    dampingRatio = 0.75f,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
+        }
+    }
+
+    Box(
         modifier = modifier
-            .clip(RoundedCornerShape(40.dp))
-            .background(Color(0xFF12121E).copy(alpha = 0.82f))
+            .clip(RoundedCornerShape(42.dp))
+            .background(Color(0xFF10101C).copy(alpha = 0.78f))
             .border(
                 width = 1.dp,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.18f),
-                        Color.White.copy(alpha = 0.05f)
+                        Color.White.copy(alpha = 0.22f),
+                        Color.White.copy(alpha = 0.06f)
                     )
                 ),
-                shape = RoundedCornerShape(40.dp)
+                shape = RoundedCornerShape(42.dp)
             )
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 8.dp, vertical = 8.dp)
     ) {
-        IslandButton(
-            icon = Icons.Rounded.Home,
-            selected = currentScreen == Screen.HOME,
-            onClick = { onNavigate(Screen.HOME) }
+        // Liquid glass sliding indicator
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(indicatorOffset.value.roundToInt(), 0) }
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.18f),
+                            Color.White.copy(alpha = 0.06f)
+                        )
+                    )
+                )
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.35f),
+                            Color.White.copy(alpha = 0.08f)
+                        )
+                    ),
+                    shape = CircleShape
+                )
         )
-        IslandButton(
-            icon = Icons.Rounded.FitnessCenter,
-            selected = currentScreen == Screen.PUSHUP,
-            onClick = { onNavigate(Screen.PUSHUP) }
-        )
-        IslandButton(
-            icon = Icons.Rounded.Settings,
-            selected = currentScreen == Screen.SETTINGS,
-            onClick = { onNavigate(Screen.SETTINGS) }
-        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            DockIconButton(
+                icon = Icons.Rounded.Home,
+                selected = currentScreen == Screen.HOME,
+                onClick = { onNavigate(Screen.HOME) },
+                onPositioned = { x, width ->
+                    buttonPositions[0] = x
+                    buttonWidth.value = width
+                }
+            )
+            DockIconButton(
+                icon = Icons.Rounded.FitnessCenter,
+                selected = currentScreen == Screen.PUSHUP,
+                onClick = { onNavigate(Screen.PUSHUP) },
+                onPositioned = { x, _ -> buttonPositions[1] = x }
+            )
+            DockIconButton(
+                icon = Icons.Rounded.Settings,
+                selected = currentScreen == Screen.SETTINGS,
+                onClick = { onNavigate(Screen.SETTINGS) },
+                onPositioned = { x, _ -> buttonPositions[2] = x }
+            )
+        }
     }
 }
 
 @Composable
-private fun IslandButton(
+private fun DockIconButton(
     icon: ImageVector,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onPositioned: (x: Float, width: Float) -> Unit
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (selected) 1.08f else 1f,
+        targetValue = if (selected) 1.12f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "scale"
+        label = "iconScale"
     )
-    val bgColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-    else Color.Transparent
 
     Box(
         modifier = Modifier
-            .size(52.dp)
+            .size(56.dp)
+            .onGloballyPositioned { coordinates ->
+                onPositioned(
+                    coordinates.positionInParent().x,
+                    coordinates.size.width.toFloat()
+                )
+            }
             .scale(scale)
-            .clip(CircleShape)
-            .background(bgColor)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -386,31 +465,32 @@ private fun IslandButton(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (selected) Color(0xFF8AB4FF) else Color.White.copy(alpha = 0.55f),
             modifier = Modifier.size(24.dp)
         )
     }
 }
 
+// ==================== GLASS COMPONENTS ====================
+
 @Composable
-private fun GlassCard(
+private fun LiquidGlassCard(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(28.dp))
-            .background(Color(0xFF141422).copy(alpha = 0.72f))
+            .clip(RoundedCornerShape(32.dp))
+            .background(Color(0xFF141422).copy(alpha = 0.65f))
             .border(
                 width = 1.dp,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.14f),
+                        Color.White.copy(alpha = 0.16f),
                         Color.White.copy(alpha = 0.04f)
                     )
                 ),
-                shape = RoundedCornerShape(28.dp)
+                shape = RoundedCornerShape(32.dp)
             )
     ) {
         content()
@@ -418,12 +498,12 @@ private fun GlassCard(
 }
 
 @Composable
-private fun StatusGlassRow(
+private fun StatusRow(
     title: String,
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    GlassCard(
+    LiquidGlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -431,21 +511,20 @@ private fun StatusGlassRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 18.dp),
+                .padding(horizontal = 22.dp, vertical = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground
+                color = Color.White
             )
             Text(
                 text = if (enabled) "Enabled" else "Disabled",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = if (enabled) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.tertiary
+                color = if (enabled) Color(0xFF8AB4FF) else Color(0xFFFF8A9B)
             )
         }
     }
