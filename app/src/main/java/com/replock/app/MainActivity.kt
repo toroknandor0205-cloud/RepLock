@@ -11,16 +11,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,40 +33,41 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.replock.app.data.VideoQuotaRepository
+import com.replock.app.data.TimeQuotaRepository
 import com.replock.app.ui.theme.RepLockTheme
-import kotlinx.coroutines.launch
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var quotaRepo: VideoQuotaRepository
+    private lateinit var quotaRepo: TimeQuotaRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        quotaRepo = VideoQuotaRepository(this)
+        quotaRepo = TimeQuotaRepository(this)
 
         setContent {
             RepLockTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = Color.Black
                 ) {
                     MainScreen(quotaRepo = quotaRepo)
                 }
@@ -78,15 +76,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen {
-    HOME, PUSHUP, SETTINGS
-}
+private enum class Screen { HOME, PUSHUP, SETTINGS }
 
 @Composable
-fun MainScreen(quotaRepo: VideoQuotaRepository) {
+fun MainScreen(quotaRepo: TimeQuotaRepository) {
     val context = LocalContext.current
-    var remaining by remember { mutableIntStateOf(quotaRepo.getRemaining()) }
+    var remainingSeconds by remember { mutableIntStateOf(quotaRepo.getRemainingSeconds()) }
+    var usedSeconds by remember { mutableIntStateOf(quotaRepo.getUsedSecondsToday()) }
+    var streak by remember { mutableIntStateOf(quotaRepo.getStreak()) }
     var currentScreen by remember { mutableStateOf(Screen.HOME) }
+
     var isAccessibilityEnabled by remember {
         mutableStateOf(isAccessibilityServiceEnabled(context))
     }
@@ -95,49 +94,42 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
     }
 
     LaunchedEffect(currentScreen) {
-        remaining = quotaRepo.getRemaining()
+        remainingSeconds = quotaRepo.getRemainingSeconds()
+        usedSeconds = quotaRepo.getUsedSecondsToday()
+        streak = quotaRepo.getStreak()
         isAccessibilityEnabled = isAccessibilityServiceEnabled(context)
         canDrawOverlays = Settings.canDrawOverlays(context)
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Deep background
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF030308),
-                            Color(0xFF0A0A16),
-                            Color(0xFF05050C)
-                        )
-                    )
-                )
-        )
+        // Animated Mesh Gradient Background
+        MeshGradientBackground()
 
         AnimatedContent(
             targetState = currentScreen,
             transitionSpec = {
-                (fadeIn(tween(300)) + scaleIn(initialScale = 0.97f, animationSpec = tween(300)))
-                    .togetherWith(fadeOut(tween(220)) + scaleOut(targetScale = 0.97f, animationSpec = tween(220)))
+                (fadeIn(tween(320)) + scaleIn(initialScale = 0.96f))
+                    .togetherWith(fadeOut(tween(220)) + scaleOut(targetScale = 0.96f))
             },
             label = "screen"
         ) { screen ->
             when (screen) {
                 Screen.HOME -> HomeContent(
-                    remaining = remaining,
+                    remainingSeconds = remainingSeconds,
+                    usedSeconds = usedSeconds,
+                    streak = streak,
                     isAccessibilityEnabled = isAccessibilityEnabled,
                     canDrawOverlays = canDrawOverlays,
-                    onOpenAccessibilitySettings = {
+                    onOpenAccessibility = {
                         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     },
-                    onOpenOverlaySettings = {
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:${context.packageName}")
+                    onOpenOverlay = {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            )
                         )
-                        context.startActivity(intent)
                     },
                     modifier = Modifier
                         .fillMaxSize()
@@ -145,8 +137,8 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
                 )
 
                 Screen.PUSHUP -> PushupDetectorScreen(
-                    onPushupDetected = {
-                        remaining = quotaRepo.addFromPushup()
+                    onPushupsCompleted = { count ->
+                        remainingSeconds = quotaRepo.addFromPushups(count)
                     },
                     onClose = { currentScreen = Screen.HOME }
                 )
@@ -154,15 +146,17 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
                 Screen.SETTINGS -> SettingsContent(
                     isAccessibilityEnabled = isAccessibilityEnabled,
                     canDrawOverlays = canDrawOverlays,
-                    onOpenAccessibilitySettings = {
+                    streak = streak,
+                    onOpenAccessibility = {
                         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     },
-                    onOpenOverlaySettings = {
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:${context.packageName}")
+                    onOpenOverlay = {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            )
                         )
-                        context.startActivity(intent)
                     },
                     modifier = Modifier
                         .fillMaxSize()
@@ -172,31 +166,97 @@ fun MainScreen(quotaRepo: VideoQuotaRepository) {
         }
 
         if (currentScreen != Screen.PUSHUP) {
-            LiquidGlassDock(
+            LiquidDock(
                 currentScreen = currentScreen,
                 onNavigate = { currentScreen = it },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 32.dp)
+                    .padding(bottom = 34.dp)
             )
         }
     }
 }
 
+// ====================== MESH GRADIENT BACKGROUND ======================
+
+@Composable
+private fun MeshGradientBackground() {
+    val infinite = rememberInfiniteTransition(label = "mesh")
+    val t by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(28000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "time"
+    )
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+
+        // Base
+        drawRect(Color(0xFF03030A))
+
+        // Moving blobs
+        val cx1 = w * (0.3f + 0.15f * sin(Math.toRadians(t.toDouble())).toFloat())
+        val cy1 = h * (0.25f + 0.1f * cos(Math.toRadians(t * 0.8).toDouble())).toFloat())
+        val cx2 = w * (0.75f + 0.12f * cos(Math.toRadians(t * 1.1).toDouble())).toFloat())
+        val cy2 = h * (0.65f + 0.12f * sin(Math.toRadians(t * 0.9).toDouble())).toFloat())
+        val cx3 = w * (0.5f + 0.2f * sin(Math.toRadians(t * 0.6).toDouble())).toFloat())
+        val cy3 = h * (0.5f + 0.15f * cos(Math.toRadians(t * 1.3).toDouble())).toFloat())
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0xFF1A1A3A).copy(alpha = 0.55f), Color.Transparent),
+                center = Offset(cx1, cy1),
+                radius = w * 0.55f
+            ),
+            radius = w * 0.55f,
+            center = Offset(cx1, cy1)
+        )
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0xFF0F2A3A).copy(alpha = 0.45f), Color.Transparent),
+                center = Offset(cx2, cy2),
+                radius = w * 0.5f
+            ),
+            radius = w * 0.5f,
+            center = Offset(cx2, cy2)
+        )
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0xFF2A1535).copy(alpha = 0.35f), Color.Transparent),
+                center = Offset(cx3, cy3),
+                radius = w * 0.45f
+            ),
+            radius = w * 0.45f,
+            center = Offset(cx3, cy3)
+        )
+    }
+}
+
+// ====================== HOME ======================
+
 @Composable
 private fun HomeContent(
-    remaining: Int,
+    remainingSeconds: Int,
+    usedSeconds: Int,
+    streak: Int,
     isAccessibilityEnabled: Boolean,
     canDrawOverlays: Boolean,
-    onOpenAccessibilitySettings: () -> Unit,
-    onOpenOverlaySettings: () -> Unit,
+    onOpenAccessibility: () -> Unit,
+    onOpenOverlay: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val progress = remainingSeconds.toFloat() / TimeQuotaRepository.DAILY_LIMIT_SECONDS
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp)
-            .padding(top = 64.dp),
+            .padding(top = 60.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -206,68 +266,107 @@ private fun HomeContent(
             color = Color.White
         )
         Text(
-            text = "Stop the scroll. Earn every video.",
+            text = "45 minutes a day. Earn more with push-ups.",
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.55f),
+            color = Color.White.copy(alpha = 0.5f),
             modifier = Modifier.padding(top = 6.dp)
         )
 
-        Spacer(modifier = Modifier.height(44.dp))
+        Spacer(modifier = Modifier.height(40.dp))
 
-        // Big glass counter
-        LiquidGlassCard(modifier = Modifier.fillMaxWidth()) {
-            Column(
+        // Circular progress with glass
+        Box(contentAlignment = Alignment.Center) {
+            // Outer glass ring background
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 36.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Remaining today",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color.White.copy(alpha = 0.6f)
+                    .size(240.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.04f))
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.linearGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.18f),
+                                Color.White.copy(alpha = 0.04f)
+                            )
+                        ),
+                        shape = CircleShape
+                    )
+            )
+
+            Canvas(modifier = Modifier.size(220.dp)) {
+                val stroke = 14.dp.toPx()
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.06f),
+                    style = Stroke(width = stroke)
                 )
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "$remaining",
-                    fontSize = 80.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (remaining > 0) Color(0xFF8AB4FF) else Color(0xFFFF8A9B)
-                )
-                Text(
-                    text = "of ${VideoQuotaRepository.DAILY_LIMIT}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.45f)
+                drawArc(
+                    brush = Brush.sweepGradient(
+                        listOf(
+                            Color(0xFF6B8CFF),
+                            Color(0xFF8AB4FF),
+                            Color(0xFF6B8CFF)
+                        )
+                    ),
+                    startAngle = -90f,
+                    sweepAngle = 360f * progress,
+                    useCenter = false,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round)
                 )
             }
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = formatTime(remainingSeconds),
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = "remaining",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.5f)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // Stats row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            GlassStatCard(
+                title = "Used today",
+                value = formatTime(usedSeconds),
+                modifier = Modifier.weight(1f)
+            )
+            GlassStatCard(
+                title = "Streak",
+                value = "\( streak day \){if (streak == 1) "" else "s"}",
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        if (remaining <= 0) {
-            LiquidGlassCard(modifier = Modifier.fillMaxWidth()) {
+        if (remainingSeconds <= 0) {
+            GlassCard {
                 Text(
-                    text = "Daily limit reached.\nPerform push-ups to unlock more videos.",
+                    text = "Time is up.\nDo push-ups to earn more minutes.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFFFF8A9B),
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(22.dp)
+                    modifier = Modifier.padding(20.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        StatusRow(
-            title = "Accessibility",
-            enabled = isAccessibilityEnabled,
-            onClick = onOpenAccessibilitySettings
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        StatusRow(
-            title = "Overlay permission",
-            enabled = canDrawOverlays,
-            onClick = onOpenOverlaySettings
-        )
+        StatusRow("Accessibility", isAccessibilityEnabled, onOpenAccessibility)
+        Spacer(modifier = Modifier.height(10.dp))
+        StatusRow("Overlay permission", canDrawOverlays, onOpenOverlay)
     }
 }
 
@@ -275,15 +374,16 @@ private fun HomeContent(
 private fun SettingsContent(
     isAccessibilityEnabled: Boolean,
     canDrawOverlays: Boolean,
-    onOpenAccessibilitySettings: () -> Unit,
-    onOpenOverlaySettings: () -> Unit,
+    streak: Int,
+    onOpenAccessibility: () -> Unit,
+    onOpenOverlay: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp)
-            .padding(top = 64.dp),
+            .padding(top = 60.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -292,32 +392,25 @@ private fun SettingsContent(
             fontWeight = FontWeight.SemiBold,
             color = Color.White
         )
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
-        StatusRow(
-            title = "Accessibility Service",
-            enabled = isAccessibilityEnabled,
-            onClick = onOpenAccessibilitySettings
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        StatusRow(
-            title = "Display over other apps",
-            enabled = canDrawOverlays,
-            onClick = onOpenOverlaySettings
-        )
-        Spacer(modifier = Modifier.height(28.dp))
+        StatusRow("Accessibility Service", isAccessibilityEnabled, onOpenAccessibility)
+        Spacer(modifier = Modifier.height(10.dp))
+        StatusRow("Display over other apps", canDrawOverlays, onOpenOverlay)
 
-        LiquidGlassCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(22.dp)) {
+        Spacer(modifier = Modifier.height(24.dp))
+
+        GlassCard {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Text(
-                    text = "How it works",
+                    text = "Rules",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "RepLock monitors TikTok and Instagram Reels. After 75 videos the feed is blocked. Every correct push-up detected by the camera restores one video.",
+                    text = "• 45 minutes per day\n• 2 correct push-ups = +1 minute\n• Resets every midnight\n• Current streak: $streak days",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.6f)
                 )
@@ -326,133 +419,101 @@ private fun SettingsContent(
     }
 }
 
-// ==================== LIQUID GLASS DOCK WITH SLIDER ====================
+// ====================== DOCK ======================
 
 @Composable
-private fun LiquidGlassDock(
+private fun LiquidDock(
     currentScreen: Screen,
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val density = LocalDensity.current
-    val scope = rememberCoroutineScope()
+    val positions = remember { mutableStateListOf(0f, 0f, 0f) }
+    val indicatorX = remember { Animatable(0f) }
 
-    // Positions of the three buttons
-    val buttonPositions = remember { mutableStateListOf(0f, 0f, 0f) }
-    val buttonWidth = remember { mutableStateOf(0f) }
-
-    val indicatorOffset = remember { Animatable(0f) }
-
-    // Animate indicator when screen changes
-    LaunchedEffect(currentScreen, buttonPositions.toList()) {
+    LaunchedEffect(currentScreen, positions.toList()) {
         val index = when (currentScreen) {
             Screen.HOME -> 0
             Screen.PUSHUP -> 1
             Screen.SETTINGS -> 2
         }
-        if (buttonPositions[index] != 0f) {
-            indicatorOffset.animateTo(
-                targetValue = buttonPositions[index],
-                animationSpec = spring(
-                    dampingRatio = 0.75f,
-                    stiffness = Spring.StiffnessMediumLow
-                )
+        if (positions[index] != 0f) {
+            indicatorX.animateTo(
+                positions[index],
+                spring(dampingRatio = 0.72f, stiffness = 400f)
             )
         }
     }
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(42.dp))
-            .background(Color(0xFF10101C).copy(alpha = 0.78f))
+            .clip(RoundedCornerShape(44.dp))
+            .background(Color(0xFF0E0E18).copy(alpha = 0.75f))
             .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.22f),
-                        Color.White.copy(alpha = 0.06f)
-                    )
+                1.dp,
+                Brush.linearGradient(
+                    listOf(Color.White.copy(0.22f), Color.White.copy(0.05f))
                 ),
-                shape = RoundedCornerShape(42.dp)
+                RoundedCornerShape(44.dp)
             )
-            .padding(horizontal = 8.dp, vertical = 8.dp)
+            .padding(8.dp)
     ) {
-        // Liquid glass sliding indicator
+        // Sliding glass indicator
         Box(
             modifier = Modifier
-                .offset { IntOffset(indicatorOffset.value.roundToInt(), 0) }
+                .offset { IntOffset(indicatorX.value.roundToInt(), 0) }
                 .size(56.dp)
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.18f),
-                            Color.White.copy(alpha = 0.06f)
+                        listOf(
+                            Color.White.copy(0.20f),
+                            Color.White.copy(0.05f)
                         )
                     )
                 )
                 .border(
-                    width = 1.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.35f),
-                            Color.White.copy(alpha = 0.08f)
-                        )
+                    1.dp,
+                    Brush.linearGradient(
+                        listOf(Color.White.copy(0.4f), Color.White.copy(0.08f))
                     ),
-                    shape = CircleShape
+                    CircleShape
                 )
         )
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            DockIconButton(
-                icon = Icons.Rounded.Home,
-                selected = currentScreen == Screen.HOME,
-                onClick = { onNavigate(Screen.HOME) },
-                onPositioned = { x, width ->
-                    buttonPositions[0] = x
-                    buttonWidth.value = width
-                }
-            )
-            DockIconButton(
-                icon = Icons.Rounded.FitnessCenter,
-                selected = currentScreen == Screen.PUSHUP,
-                onClick = { onNavigate(Screen.PUSHUP) },
-                onPositioned = { x, _ -> buttonPositions[1] = x }
-            )
-            DockIconButton(
-                icon = Icons.Rounded.Settings,
-                selected = currentScreen == Screen.SETTINGS,
-                onClick = { onNavigate(Screen.SETTINGS) },
-                onPositioned = { x, _ -> buttonPositions[2] = x }
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            DockButton(Icons.Rounded.Home, currentScreen == Screen.HOME, {
+                onNavigate(Screen.HOME)
+            }) { x, _ -> positions[0] = x }
+
+            DockButton(Icons.Rounded.FitnessCenter, currentScreen == Screen.PUSHUP, {
+                onNavigate(Screen.PUSHUP)
+            }) { x, _ -> positions[1] = x }
+
+            DockButton(Icons.Rounded.Settings, currentScreen == Screen.SETTINGS, {
+                onNavigate(Screen.SETTINGS)
+            }) { x, _ -> positions[2] = x }
         }
     }
 }
 
 @Composable
-private fun DockIconButton(
+private fun DockButton(
     icon: ImageVector,
     selected: Boolean,
     onClick: () -> Unit,
-    onPositioned: (x: Float, width: Float) -> Unit
+    onPositioned: (Float, Float) -> Unit
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (selected) 1.12f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "iconScale"
+        if (selected) 1.1f else 1f,
+        spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "scale"
     )
 
     Box(
         modifier = Modifier
             .size(56.dp)
-            .onGloballyPositioned { coordinates ->
-                onPositioned(
-                    coordinates.positionInParent().x,
-                    coordinates.size.width.toFloat()
-                )
+            .onGloballyPositioned {
+                onPositioned(it.positionInParent().x, it.size.width.toFloat())
             }
             .scale(scale)
             .clickable(
@@ -463,34 +524,29 @@ private fun DockIconButton(
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = icon,
+            icon,
             contentDescription = null,
-            tint = if (selected) Color(0xFF8AB4FF) else Color.White.copy(alpha = 0.55f),
+            tint = if (selected) Color(0xFF8AB4FF) else Color.White.copy(0.5f),
             modifier = Modifier.size(24.dp)
         )
     }
 }
 
-// ==================== GLASS COMPONENTS ====================
+// ====================== GLASS COMPONENTS ======================
 
 @Composable
-private fun LiquidGlassCard(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
+private fun GlassCard(content: @Composable () -> Unit) {
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(32.dp))
-            .background(Color(0xFF141422).copy(alpha = 0.65f))
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(Color.White.copy(alpha = 0.06f))
             .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.16f),
-                        Color.White.copy(alpha = 0.04f)
-                    )
+                1.dp,
+                Brush.linearGradient(
+                    listOf(Color.White.copy(0.16f), Color.White.copy(0.03f))
                 ),
-                shape = RoundedCornerShape(32.dp)
+                RoundedCornerShape(28.dp)
             )
     ) {
         content()
@@ -498,31 +554,54 @@ private fun LiquidGlassCard(
 }
 
 @Composable
-private fun StatusRow(
-    title: String,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    LiquidGlassCard(
+private fun GlassStatCard(title: String, value: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .border(
+                1.dp,
+                Brush.linearGradient(
+                    listOf(Color.White.copy(0.14f), Color.White.copy(0.03f))
+                ),
+                RoundedCornerShape(24.dp)
+            )
+            .padding(vertical = 18.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(title, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(0.5f))
+            Spacer(Modifier.height(4.dp))
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun StatusRow(title: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .border(
+                1.dp,
+                Brush.linearGradient(
+                    listOf(Color.White.copy(0.14f), Color.White.copy(0.03f))
+                ),
+                RoundedCornerShape(22.dp)
+            )
             .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Text(title, color = Color.White)
             Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.White
-            )
-            Text(
-                text = if (enabled) "Enabled" else "Disabled",
-                style = MaterialTheme.typography.labelLarge,
+                if (enabled) "Enabled" else "Disabled",
                 fontWeight = FontWeight.SemiBold,
                 color = if (enabled) Color(0xFF8AB4FF) else Color(0xFFFF8A9B)
             )
@@ -530,9 +609,14 @@ private fun StatusRow(
     }
 }
 
+private fun formatTime(seconds: Int): String {
+    val m = seconds / 60
+    val s = seconds % 60
+    return "%d:%02d".format(m, s)
+}
+
 private fun isAccessibilityServiceEnabled(context: Context): Boolean {
     val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-    val enabledServices =
-        am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_GENERIC)
-    return enabledServices.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
+    val list = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_GENERIC)
+    return list.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
 }
