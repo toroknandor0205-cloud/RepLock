@@ -399,7 +399,7 @@ private fun SettingsContent(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "• 45 minutes per day\n• 2 correct push-ups = +1 minute\n• Resets every midnight\n• Current streak: $streak days",
+                    text = "45 minutes per day\n2 correct push-ups = +1 minute\nResets every midnight\nCurrent streak: $streak days",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.6f)
                 )
