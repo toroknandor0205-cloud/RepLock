@@ -11,7 +11,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -22,21 +31,43 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -75,7 +106,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { HOME, PUSHUP, SETTINGS }
+private enum class Screen {
+    HOME, PUSHUP, SETTINGS
+}
 
 @Composable
 fun MainScreen(quotaRepo: TimeQuotaRepository) {
@@ -333,7 +366,7 @@ private fun HomeContent(
             )
             GlassStatCard(
                 title = "Streak",
-                value = "\( streak day \){if (streak == 1) "" else "s"}",
+                value = "$streak days",
                 modifier = Modifier.weight(1f)
             )
         }
@@ -353,9 +386,17 @@ private fun HomeContent(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        StatusRow("Accessibility", isAccessibilityEnabled, onOpenAccessibility)
+        StatusRow(
+            title = "Accessibility",
+            enabled = isAccessibilityEnabled,
+            onClick = onOpenAccessibility
+        )
         Spacer(modifier = Modifier.height(10.dp))
-        StatusRow("Overlay permission", canDrawOverlays, onOpenOverlay)
+        StatusRow(
+            title = "Overlay permission",
+            enabled = canDrawOverlays,
+            onClick = onOpenOverlay
+        )
     }
 }
 
@@ -383,9 +424,17 @@ private fun SettingsContent(
         )
         Spacer(modifier = Modifier.height(32.dp))
 
-        StatusRow("Accessibility Service", isAccessibilityEnabled, onOpenAccessibility)
+        StatusRow(
+            title = "Accessibility Service",
+            enabled = isAccessibilityEnabled,
+            onClick = onOpenAccessibility
+        )
         Spacer(modifier = Modifier.height(10.dp))
-        StatusRow("Display over other apps", canDrawOverlays, onOpenOverlay)
+        StatusRow(
+            title = "Display over other apps",
+            enabled = canDrawOverlays,
+            onClick = onOpenOverlay
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -425,8 +474,8 @@ private fun LiquidDock(
         }
         if (positions[index] != 0f) {
             indicatorX.animateTo(
-                positions[index],
-                spring(dampingRatio = 0.72f, stiffness = 400f)
+                targetValue = positions[index],
+                animationSpec = spring(dampingRatio = 0.72f, stiffness = 400f)
             )
         }
     }
@@ -436,11 +485,14 @@ private fun LiquidDock(
             .clip(RoundedCornerShape(44.dp))
             .background(Color(0xFF0E0E18).copy(alpha = 0.75f))
             .border(
-                1.dp,
-                Brush.linearGradient(
-                    listOf(Color.White.copy(0.22f), Color.White.copy(0.05f))
+                width = 1.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.22f),
+                        Color.White.copy(alpha = 0.05f)
+                    )
                 ),
-                RoundedCornerShape(44.dp)
+                shape = RoundedCornerShape(44.dp)
             )
             .padding(8.dp)
     ) {
@@ -450,34 +502,44 @@ private fun LiquidDock(
                 .size(56.dp)
                 .clip(CircleShape)
                 .background(
-                    Brush.radialGradient(
-                        listOf(
-                            Color.White.copy(0.20f),
-                            Color.White.copy(0.05f)
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.20f),
+                            Color.White.copy(alpha = 0.05f)
                         )
                     )
                 )
                 .border(
-                    1.dp,
-                    Brush.linearGradient(
-                        listOf(Color.White.copy(0.4f), Color.White.copy(0.08f))
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.4f),
+                            Color.White.copy(alpha = 0.08f)
+                        )
                     ),
-                    CircleShape
+                    shape = CircleShape
                 )
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            DockButton(Icons.Rounded.Home, currentScreen == Screen.HOME, {
-                onNavigate(Screen.HOME)
-            }) { x, _ -> positions[0] = x }
-
-            DockButton(Icons.Rounded.FitnessCenter, currentScreen == Screen.PUSHUP, {
-                onNavigate(Screen.PUSHUP)
-            }) { x, _ -> positions[1] = x }
-
-            DockButton(Icons.Rounded.Settings, currentScreen == Screen.SETTINGS, {
-                onNavigate(Screen.SETTINGS)
-            }) { x, _ -> positions[2] = x }
+            DockButton(
+                icon = Icons.Rounded.Home,
+                selected = currentScreen == Screen.HOME,
+                onClick = { onNavigate(Screen.HOME) },
+                onPositioned = { x, _ -> positions[0] = x }
+            )
+            DockButton(
+                icon = Icons.Rounded.FitnessCenter,
+                selected = currentScreen == Screen.PUSHUP,
+                onClick = { onNavigate(Screen.PUSHUP) },
+                onPositioned = { x, _ -> positions[1] = x }
+            )
+            DockButton(
+                icon = Icons.Rounded.Settings,
+                selected = currentScreen == Screen.SETTINGS,
+                onClick = { onNavigate(Screen.SETTINGS) },
+                onPositioned = { x, _ -> positions[2] = x }
+            )
         }
     }
 }
@@ -490,8 +552,8 @@ private fun DockButton(
     onPositioned: (Float, Float) -> Unit
 ) {
     val scale by animateFloatAsState(
-        if (selected) 1.1f else 1f,
-        spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        targetValue = if (selected) 1.1f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "scale"
     )
 
@@ -510,9 +572,9 @@ private fun DockButton(
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            icon,
+            imageVector = icon,
             contentDescription = null,
-            tint = if (selected) Color(0xFF8AB4FF) else Color.White.copy(0.5f),
+            tint = if (selected) Color(0xFF8AB4FF) else Color.White.copy(alpha = 0.5f),
             modifier = Modifier.size(24.dp)
         )
     }
@@ -526,11 +588,14 @@ private fun GlassCard(content: @Composable () -> Unit) {
             .clip(RoundedCornerShape(28.dp))
             .background(Color.White.copy(alpha = 0.06f))
             .border(
-                1.dp,
-                Brush.linearGradient(
-                    listOf(Color.White.copy(0.16f), Color.White.copy(0.03f))
+                width = 1.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.16f),
+                        Color.White.copy(alpha = 0.03f)
+                    )
                 ),
-                RoundedCornerShape(28.dp)
+                shape = RoundedCornerShape(28.dp)
             )
     ) {
         content()
@@ -538,54 +603,77 @@ private fun GlassCard(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun GlassStatCard(title: String, value: String, modifier: Modifier = Modifier) {
+private fun GlassStatCard(
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(24.dp))
             .background(Color.White.copy(alpha = 0.06f))
             .border(
-                1.dp,
-                Brush.linearGradient(
-                    listOf(Color.White.copy(0.14f), Color.White.copy(0.03f))
+                width = 1.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.14f),
+                        Color.White.copy(alpha = 0.03f)
+                    )
                 ),
-                RoundedCornerShape(24.dp)
+                shape = RoundedCornerShape(24.dp)
             )
             .padding(vertical = 18.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(0.5f))
-            Spacer(Modifier.height(4.dp))
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White.copy(alpha = 0.5f)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White
+            )
         }
     }
 }
 
 @Composable
-private fun StatusRow(title: String, enabled: Boolean, onClick: () -> Unit) {
+private fun StatusRow(
+    title: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
             .background(Color.White.copy(alpha = 0.06f))
             .border(
-                1.dp,
-                Brush.linearGradient(
-                    listOf(Color.White.copy(0.14f), Color.White.copy(0.03f))
+                width = 1.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.14f),
+                        Color.White.copy(alpha = 0.03f)
+                    )
                 ),
-                RoundedCornerShape(22.dp)
+                shape = RoundedCornerShape(22.dp)
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
         Row(
-            Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, color = Color.White)
+            Text(text = title, color = Color.White)
             Text(
-                if (enabled) "Enabled" else "Disabled",
+                text = if (enabled) "Enabled" else "Disabled",
                 fontWeight = FontWeight.SemiBold,
                 color = if (enabled) Color(0xFF8AB4FF) else Color(0xFFFF8A9B)
             )
